@@ -1,0 +1,29 @@
+# TEST FIXTURE ONLY. Round illustrative values for exercising the calculators.
+# These are NOT verified figures and must never be copied into data/tax_parameters/.
+tax_year: 2025
+parameters:
+  section_179_dollar_limit: {description: "test", unit: usd, value: 2500000, source_url: https://www.irs.gov/publications/p946, evidence: "test fixture"}
+  section_179_phaseout_threshold: {description: "test", unit: usd, value: 4000000, source_url: https://www.irs.gov/publications/p946, evidence: "test fixture"}
+  section_179_suv_limit: {description: "test", unit: usd, value: 31000, source_url: https://www.irs.gov/publications/p946, evidence: "test fixture"}
+  bonus_depreciation_pct:
+    description: "test: depends on acquisition date"
+    evidence: "test fixture"
+    unit: percent
+    source_url: https://www.irs.gov/publications/p946
+    periods:
+      - {start: 2025-01-01, end: 2025-01-19, value: 40}
+      - {start: 2025-01-20, end: 2025-12-31, value: 100}
+  passenger_auto_first_year_limit_with_bonus: {description: "test", unit: usd, value: 20000, source_url: https://www.irs.gov/publications/p946, evidence: "test fixture"}
+  passenger_auto_first_year_limit_without_bonus: {description: "test", unit: usd, value: 12000, source_url: https://www.irs.gov/publications/p946, evidence: "test fixture"}
+  passenger_auto_second_year_limit: {description: "test", unit: usd, value: 19000, source_url: https://www.irs.gov/publications/p946, evidence: "test fixture"}
+  passenger_auto_third_year_limit: {description: "test", unit: usd, value: 11000, source_url: https://www.irs.gov/publications/p946, evidence: "test fixture"}
+  passenger_auto_succeeding_years_limit: {description: "test", unit: usd, value: 7000, source_url: https://www.irs.gov/publications/p946, evidence: "test fixture"}
+  standard_mileage_rate_business: {description: "test", unit: usd_per_mile, value: 0.70, source_url: https://www.irs.gov/tax-professionals/standard-mileage-rates, evidence: "test fixture"}
+  home_office_simplified_rate: {description: "test", unit: usd_per_sq_ft, value: 5, source_url: https://www.irs.gov/publications/p587, evidence: "test fixture"}
+  home_office_simplified_max_sq_ft: {description: "test", unit: sq_ft, value: 300, source_url: https://www.irs.gov/publications/p587, evidence: "test fixture"}
+  business_meals_deduction_pct: {description: "test", unit: percent, value: 50, source_url: https://www.irs.gov/publications/p463, evidence: "test fixture"}
+  business_gift_limit_per_recipient: {description: "test", unit: usd, value: 25, source_url: https://www.irs.gov/publications/p463, evidence: "test fixture"}
+  de_minimis_safe_harbor_with_afs: {description: "test", unit: usd, value: 5000, source_url: https://www.irs.gov/publications/p334, evidence: "test fixture"}
+  de_minimis_safe_harbor_without_afs: {description: "test", unit: usd, value: 2500, source_url: https://www.irs.gov/publications/p334, evidence: "test fixture"}
+  startup_cost_immediate_deduction_limit: {description: "test", unit: usd, value: 5000, source_url: https://www.irs.gov/publications/p334, evidence: "test fixture"}
+  startup_cost_phaseout_threshold: {description: "test", unit: usd, value: 50000, source_url: https://www.irs.gov/publications/p334, evidence: "test fixture"}

@@ -1,0 +1,12 @@
+{
+  "run_id": "20260924T194152Z",
+  "agent_model": "claude-sonnet-5",
+  "verifier_model": "claude-sonnet-5",
+  "prompt_version": "1.0.0",
+  "retry_of": "20260924T192804Z",
+  "judge_model": "claude-opus-5-5",
+  "rubric_version": "1.0.0",
+  "treatment_accuracy": 0.9365079365079365,
+  "citation_recall": 0.9901960784313726,
+  "faithfulness_final": 0.9253249090147704
+}

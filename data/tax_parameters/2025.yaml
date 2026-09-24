@@ -1,0 +1,127 @@
+# Tax parameters for tax year 2025.
+# Filled values were read from the 2025 IRS publications named in each `evidence`
+# field (ingested from irs.gov on 2026-09-24). Null values are not yet verified.
+# Loaded by writeoff.tax_parameters; entries without a source_url are rejected.
+# If the cited page does not yet cover this year, update source_url when filling in.
+tax_year: 2025
+parameters:
+  section_179_dollar_limit:
+    description: "Maximum § 179 expense deduction for property placed in service in the year"
+    unit: usd
+    value: 2500000
+    source_url: https://www.irs.gov/publications/p946
+    evidence: "Pub 946 (2025), ch. 2, How Much Can You Deduct?, Dollar Limits"
+  section_179_phaseout_threshold:
+    description: "Cost of § 179 property placed in service above which the dollar limit is reduced dollar-for-dollar"
+    unit: usd
+    value: 4000000
+    source_url: https://www.irs.gov/publications/p946
+    evidence: "Pub 946 (2025), ch. 2, How Much Can You Deduct?, Dollar Limits"
+  section_179_suv_limit:
+    description: "§ 179 expense limit for certain sport utility vehicles"
+    unit: usd
+    value: 31300
+    source_url: https://www.irs.gov/publications/p946
+    evidence: "Pub 946 (2025), ch. 2, How Much Can You Deduct?, Dollar Limits"
+  bonus_depreciation_pct:
+    description: "Special depreciation allowance percentage under § 168(k); if it depends on acquisition date, replace value with periods"
+    unit: percent
+    source_url: https://www.irs.gov/publications/p946
+    evidence: "Pub 946 (2025), ch. 3, What Is Qualified Property? (40% if acquired after Sept 27, 2017 and before Jan 20, 2025; 100% if acquired after Jan 19, 2025)"
+    periods:  # keyed by acquisition date
+      - {start: 2017-09-28, end: 2025-01-19, value: 40}
+      - {start: 2025-01-20, end: 2025-12-31, value: 100}
+  passenger_auto_first_year_limit_with_bonus:
+    description: "First-year depreciation cap for passenger automobiles (§ 280F) when the special allowance applies"
+    unit: usd
+    value: 20200
+    source_url: https://www.irs.gov/publications/p463
+    evidence: "Pub 463 (2025), ch. 4, Car Expenses, Actual Car Expenses, Depreciation Limits"
+  passenger_auto_first_year_limit_without_bonus:
+    description: "First-year depreciation cap for passenger automobiles (§ 280F) without the special allowance"
+    unit: usd
+    value: 12200
+    source_url: https://www.irs.gov/publications/p463
+    evidence: "Pub 463 (2025), ch. 4, Car Expenses, Actual Car Expenses, Depreciation Limits"
+  passenger_auto_second_year_limit:
+    description: "Second-year depreciation cap for passenger automobiles (§ 280F)"
+    unit: usd
+    value: 19600
+    source_url: https://www.irs.gov/publications/p463
+    evidence: "Pub 463 (2025), ch. 4, Car Expenses, Actual Car Expenses, Depreciation Limits"
+  passenger_auto_third_year_limit:
+    description: "Third-year depreciation cap for passenger automobiles (§ 280F)"
+    unit: usd
+    value: 11800
+    source_url: https://www.irs.gov/publications/p463
+    evidence: "Pub 463 (2025), ch. 4, Car Expenses, Actual Car Expenses, Depreciation Limits"
+  passenger_auto_succeeding_years_limit:
+    description: "Depreciation cap for passenger automobiles in the fourth and later years (§ 280F)"
+    unit: usd
+    value: 7060
+    source_url: https://www.irs.gov/publications/p463
+    evidence: "Pub 463 (2025), ch. 4, Car Expenses, Actual Car Expenses, Depreciation Limits"
+  standard_mileage_rate_business:
+    description: "Standard mileage rate for business use of a vehicle"
+    unit: usd_per_mile
+    value: 0.70
+    source_url: https://www.irs.gov/publications/p463
+    evidence: "Pub 463 (2025), ch. 4, Car Expenses, Standard Mileage Rate"
+  home_office_simplified_rate:
+    description: "Simplified-method home office deduction rate"
+    unit: usd_per_sq_ft
+    value: 5
+    source_url: https://www.irs.gov/publications/p587
+    evidence: "Pub 587 (2025), Figuring the Deduction, Using the Simplified Method"
+  home_office_simplified_max_sq_ft:
+    description: "Maximum square footage allowed under the simplified home office method"
+    unit: sq_ft
+    value: 300
+    source_url: https://www.irs.gov/publications/p587
+    evidence: "Pub 587 (2025), Figuring the Deduction, Using the Simplified Method"
+  business_meals_deduction_pct:
+    description: "Deductible percentage of qualifying business meal expenses (§ 274(n))"
+    unit: percent
+    value: 50
+    source_url: https://www.irs.gov/publications/p463
+    evidence: "Pub 463 (2025), ch. 2, 50% Limit"
+  business_gift_limit_per_recipient:
+    description: "Annual deduction limit for business gifts per recipient (§ 274(b))"
+    unit: usd
+    value: 25
+    source_url: https://www.irs.gov/publications/p463
+    evidence: "Pub 463 (2025), ch. 3"
+  de_minimis_safe_harbor_with_afs:
+    description: "De minimis safe harbor limit per invoice or item for taxpayers with an applicable financial statement"
+    unit: usd
+    value: 5000
+    source_url: https://www.irs.gov/publications/p334
+    evidence: "Pub 334 (2025), ch. 8, De Minimis Safe Harbor for Tangible Property"
+  de_minimis_safe_harbor_without_afs:
+    description: "De minimis safe harbor limit per invoice or item for taxpayers without an applicable financial statement"
+    unit: usd
+    value: 2500
+    source_url: https://www.irs.gov/publications/p334
+    evidence: "Pub 334 (2025), ch. 8, De Minimis Safe Harbor for Tangible Property"
+  startup_cost_immediate_deduction_limit:
+    description: "Start-up costs deductible in the first year under § 195(b)"
+    unit: usd
+    value: 5000
+    source_url: https://www.irs.gov/publications/p583
+    evidence: "Pub 583, Deducting Business Expenses (Business Start-Up Costs)"
+  startup_cost_phaseout_threshold:
+    description: "Total start-up costs above which the § 195 immediate deduction is reduced"
+    unit: usd
+    value: 50000
+    source_url: https://www.irs.gov/publications/p583
+    evidence: "Pub 583, Deducting Business Expenses (Business Start-Up Costs)"
+  qbi_threshold_single:
+    description: "§ 199A taxable income threshold (single and other filers)"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/forms-pubs/about-form-8995
+  qbi_threshold_joint:
+    description: "§ 199A taxable income threshold (married filing jointly)"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/forms-pubs/about-form-8995

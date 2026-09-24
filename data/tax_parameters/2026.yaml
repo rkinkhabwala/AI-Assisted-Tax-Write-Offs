@@ -1,0 +1,106 @@
+# Tax parameters for tax year 2026.
+# SCHEMA ONLY: every value is null until a person verifies it on the cited irs.gov
+# page. Loaded by writeoff.tax_parameters; entries without a source_url are rejected.
+# If the cited page does not yet cover this year, update source_url when filling in.
+tax_year: 2026
+parameters:
+  section_179_dollar_limit:
+    description: "Maximum § 179 expense deduction for property placed in service in the year"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p946
+  section_179_phaseout_threshold:
+    description: "Cost of § 179 property placed in service above which the dollar limit is reduced dollar-for-dollar"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p946
+  section_179_suv_limit:
+    description: "§ 179 expense limit for certain sport utility vehicles"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p946
+  bonus_depreciation_pct:
+    description: "Special depreciation allowance percentage under § 168(k); if it depends on acquisition date, replace value with periods"
+    unit: percent
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p946
+  passenger_auto_first_year_limit_with_bonus:
+    description: "First-year depreciation cap for passenger automobiles (§ 280F) when the special allowance applies"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p946
+  passenger_auto_first_year_limit_without_bonus:
+    description: "First-year depreciation cap for passenger automobiles (§ 280F) without the special allowance"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p946
+  passenger_auto_second_year_limit:
+    description: "Second-year depreciation cap for passenger automobiles (§ 280F)"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p946
+  passenger_auto_third_year_limit:
+    description: "Third-year depreciation cap for passenger automobiles (§ 280F)"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p946
+  passenger_auto_succeeding_years_limit:
+    description: "Depreciation cap for passenger automobiles in the fourth and later years (§ 280F)"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p946
+  standard_mileage_rate_business:
+    description: "Standard mileage rate for business use of a vehicle"
+    unit: usd_per_mile
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/tax-professionals/standard-mileage-rates
+  home_office_simplified_rate:
+    description: "Simplified-method home office deduction rate"
+    unit: usd_per_sq_ft
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p587
+  home_office_simplified_max_sq_ft:
+    description: "Maximum square footage allowed under the simplified home office method"
+    unit: sq_ft
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p587
+  business_meals_deduction_pct:
+    description: "Deductible percentage of qualifying business meal expenses (§ 274(n))"
+    unit: percent
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p463
+  business_gift_limit_per_recipient:
+    description: "Annual deduction limit for business gifts per recipient (§ 274(b))"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p463
+  de_minimis_safe_harbor_with_afs:
+    description: "De minimis safe harbor limit per invoice or item for taxpayers with an applicable financial statement"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/businesses/small-businesses-self-employed/tangible-property-final-regulations
+  de_minimis_safe_harbor_without_afs:
+    description: "De minimis safe harbor limit per invoice or item for taxpayers without an applicable financial statement"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/businesses/small-businesses-self-employed/tangible-property-final-regulations
+  startup_cost_immediate_deduction_limit:
+    description: "Start-up costs deductible in the first year under § 195(b)"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p334
+  startup_cost_phaseout_threshold:
+    description: "Total start-up costs above which the § 195 immediate deduction is reduced"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/publications/p334
+  qbi_threshold_single:
+    description: "§ 199A taxable income threshold (single and other filers)"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/forms-pubs/about-form-8995
+  qbi_threshold_joint:
+    description: "§ 199A taxable income threshold (married filing jointly)"
+    unit: usd
+    value: null  # verify on irs.gov
+    source_url: https://www.irs.gov/forms-pubs/about-form-8995

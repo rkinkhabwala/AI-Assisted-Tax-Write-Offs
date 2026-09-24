@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+evals/reports/*
+!evals/reports/.gitkeep
+.DS_Store
+data/raw/
+data/staging/
+data/cache/

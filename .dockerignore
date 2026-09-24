@@ -1,0 +1,13 @@
+.venv
+.env
+.git
+**/__pycache__
+.mypy_cache
+.ruff_cache
+.pytest_cache
+tests
+evals
+data/raw
+data/staging
+scripts
+data/cache
