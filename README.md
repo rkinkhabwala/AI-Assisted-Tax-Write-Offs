@@ -122,6 +122,9 @@ make ask Q="Can I deduct a client lunch?" ENTITY=sole_prop YEAR=2025   # CLI, wi
 
 ## Web app and API
 
+Full reference for every endpoint, agent tool, hook, external service and setting:
+[docs/REFERENCE.md](docs/REFERENCE.md).
+
 The Streamlit UI (`ui/app.py`) is a thin client of the API. Pick the entity type and tax
 year in the sidebar, then ask. While the agent works you see what it's doing
 ("Searching the tax law…", "Checking the answer against the sources"), then the verified
@@ -177,7 +180,8 @@ migrations/          plain SQL, applied in filename order
 data/tax_parameters/ per-year limits and rates, each with an irs.gov source_url
 data/sources.yaml    the corpus: sources and their editions per tax year
 scripts/             generate_sources.py (writes data/sources.yaml), smoke_test.py
-prompts/system.md    versioned system prompt
+prompts/system.md    versioned system prompt (earlier versions in prompts/archive/)
+docs/REFERENCE.md    interface reference: API, tools, hooks, services, settings
 evals/               retrieval, answer and safety evaluations
 ```
 
