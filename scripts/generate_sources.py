@@ -55,6 +55,11 @@ PUBLICATIONS = [
     ("pub-583", "Publication 583, Starting a Business and Keeping Records", "Pub 583",
      "irs_publication", [], {2025: (f"{IRS}/publications/p583", "irs_html"),
                              2026: (f"{IRS}/publications/p583", "irs_html")}),
+    # Employer payroll: wages paid to family members, fringe benefits, withholding. The live
+    # page is already the 2026 edition; 2025 survives only as a PDF (as with Pub 15-B).
+    ("pub-15", "Publication 15 (Circular E), Employer's Tax Guide", "Pub 15",
+     "irs_publication", [], {2025: (f"{IRS}/pub/irs-prior/p15--2025.pdf", "pdf"),
+                             2026: (f"{IRS}/publications/p15", "irs_html")}),
     ("instr-sch-c", "Instructions for Schedule C (Form 1040)", "Instructions for Schedule C",
      "form_instructions", ["sole_prop"], {2025: (f"{IRS}/instructions/i1040sc", "irs_html")}),
     ("instr-4562", "Instructions for Form 4562", "Instructions for Form 4562",
@@ -67,6 +72,9 @@ PUBLICATIONS = [
      "form_instructions", ["s_corp"], {2025: (f"{IRS}/instructions/i1120s", "irs_html")}),
     ("instr-1065", "Instructions for Form 1065", "Instructions for Form 1065",
      "form_instructions", ["partnership"], {2025: (f"{IRS}/instructions/i1065", "irs_html")}),
+    # Qualified business income deduction (simplified computation), incl. the thresholds.
+    ("instr-8995", "Instructions for Form 8995", "Instructions for Form 8995",
+     "form_instructions", PASS_THROUGH, {2025: (f"{IRS}/instructions/i8995", "irs_html")}),
 ]
 
 

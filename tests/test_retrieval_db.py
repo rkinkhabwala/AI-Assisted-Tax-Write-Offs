@@ -26,6 +26,7 @@ from writeoff.evals.retrieval import append_csv, check_baseline, run_eval, save_
 from writeoff.evals.variants import INDEX_VARIANTS
 from writeoff.ingestion.pipeline import IngestionPipeline
 from writeoff.models import ChunkLevel, DocType, EntityType, SearchFilters
+from writeoff.retention import PurgeResult, purge
 from writeoff.retrieval.hybrid import HybridRetriever, RetrievalConfig
 from writeoff.retrieval.pgvector_store import PgVectorStore
 from writeoff.tax_parameters import TaxParameters
@@ -353,6 +354,37 @@ async def test_agent_store_sessions_traces_and_retention(fresh_db: str) -> None:
     assert await agent_store.purge_traces(older_than_days=30) == 0
     assert await agent_store.purge_traces(older_than_days=0) == 1
     assert await agent_store.tool_calls(request_id) == []
+    assert await agent_store.find_session(uuid4()) is None
+    assert await agent_store.find_session(session.session_id) == session
+    assert await agent_store.purge_sessions(idle_days=30) == 0
+    assert await agent_store.purge_sessions(idle_days=0) == 1
+    assert await agent_store.find_session(session.session_id) is None
+
+
+async def test_retention_purges_old_traces_and_idle_sessions(fresh_db: str) -> None:
+    apply_migrations(fresh_db, Path(MIGRATIONS))
+    agent_store = AgentStore(fresh_db)
+    old, recent = SessionState(uuid4()), SessionState(uuid4())
+    for s in (old, recent):
+        await agent_store.save_session(s)
+        await agent_store.start_request(uuid4(), s.session_id, "q", "1.0.0", "m")
+    async with await psycopg.AsyncConnection.connect(fresh_db) as conn:
+        await conn.execute(
+            "UPDATE agent_sessions SET updated_at = now() - interval '40 days' "
+            "WHERE session_id = %s",
+            (old.session_id,),
+        )
+        await conn.execute(
+            "UPDATE agent_requests SET created_at = now() - interval '40 days' "
+            "WHERE session_id = %s",
+            (old.session_id,),
+        )
+    assert await purge(agent_store, 0, 0) == PurgeResult(0, 0)  # 0 skips both steps
+    assert await purge(agent_store, 30, 0) == PurgeResult(1, 0)
+    assert await agent_store.find_session(old.session_id) is not None
+    assert await purge(agent_store, 30, 30) == PurgeResult(0, 1)
+    assert await agent_store.find_session(old.session_id) is None
+    assert await agent_store.find_session(recent.session_id) is not None
 
 
 async def test_search_and_citation_tools_record_evidence(store: PgVectorStore) -> None:
@@ -368,3 +400,7 @@ async def test_search_and_citation_tools_record_evidence(store: PgVectorStore) -
     citations = runtime.state.evidence.citations
     assert "IRC § 280A(c)(1)" in citations
     assert any(c.startswith("IRC § 280A") for c in citations)
+    # Every recorded passage carries its document, for the UI's Sources panel.
+    documents = runtime.state.evidence.documents
+    assert set(documents) == set(citations)
+    assert all(d.url.startswith("http") and d.title for d in documents.values())

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
+import httpx
 import pytest
 from claude_agent_sdk import (
     AssistantMessage,
@@ -18,9 +19,20 @@ from claude_agent_sdk import (
     ToolUseBlock,
 )
 from claude_agent_sdk.types import Message, PostToolUseFailureHookInput, PostToolUseHookInput
+from pydantic import SecretStr
 
 from tests.fakes import FakeEmbedder, FakeReranker, FakeRewriter
-from writeoff.agent.harness import AgentConfig, ClientLike, WriteOffAgent, total_input_tokens
+from writeoff.agent.evidence import Evidence, SourceDocument
+from writeoff.agent.factory import build_agent
+from writeoff.agent.harness import (
+    AgentConfig,
+    AgentEvent,
+    ClientLike,
+    WriteOffAgent,
+    cited_sources,
+    describe_tool,
+    total_input_tokens,
+)
 from writeoff.agent.hooks import TraceHooks, redact_value, validation_errors
 from writeoff.agent.prompt import DISCLAIMER, PromptError, load_system_prompt, session_context
 from writeoff.agent.store import SessionState
@@ -33,6 +45,7 @@ from writeoff.agent.verifier import (
     JudgeOutput,
     Verifier,
 )
+from writeoff.config import Settings
 from writeoff.models import EntityType
 from writeoff.retrieval.hybrid import HybridRetriever
 from writeoff.retrieval.pgvector_store import PgVectorStore
@@ -55,7 +68,7 @@ def _runtime(timeout: float = 30.0) -> ToolRuntime:
 
 def test_system_prompt_loads_with_version_and_disclaimer() -> None:
     prompt = load_system_prompt(REPO / "prompts" / "system.md")
-    assert prompt.version == "1.0.0"
+    assert prompt.version == "1.1.1"
     assert DISCLAIMER in prompt.text
     assert "prompt-version" not in prompt.text
     for rule in (
@@ -63,8 +76,13 @@ def test_system_prompt_loads_with_version_and_disclaimer() -> None:
         "get_tax_parameter",
         "exactly one short clarifying question",
         "I couldn't find authority for this in my sources",
+        "Never describe your process or tools",
+        "Aim for 150 to 300 words",
+        "are leads, not citations",
     ):
         assert rule in prompt.text
+    # Earlier versions are archived so answer evals can compare against them.
+    assert load_system_prompt(REPO / "prompts" / "archive" / "system-1.0.0.md").version == "1.0.0"
 
 
 def test_system_prompt_requirements(tmp_path: Path) -> None:
@@ -275,7 +293,11 @@ def _agent(
         yield FakeClient(messages, captured.setdefault("sent", []), fail)
 
     config = AgentConfig(
-        model="claude-sonnet-5", max_turns=7, max_budget_usd=0.25, supported_years=YEARS
+        model="claude-sonnet-5",
+        max_turns=7,
+        max_budget_usd=0.25,
+        supported_years=YEARS,
+        api_key=SecretStr("sk-test"),
     )
     prompt = load_system_prompt(REPO / "prompts" / "system.md")
     return WriteOffAgent(
@@ -302,6 +324,8 @@ async def test_agent_options_are_isolated() -> None:
     assert isinstance(options.system_prompt, str)
     assert "Entity type: sole_prop" in options.system_prompt
     assert options.resume is None
+    # The CLI must use the API key, never a local claude.ai login.
+    assert options.env == {"ANTHROPIC_API_KEY": "sk-test"}
 
 
 async def test_agent_complete_answer_and_redaction() -> None:
@@ -379,3 +403,112 @@ async def test_agent_runs_verifier_on_full_answers_only() -> None:
     assert question.verification is not None
     assert question.verification.status == "skipped"
     assert question.text == "Which entity type is your business?"
+
+
+def test_build_agent_requires_an_api_key() -> None:
+    settings = Settings(anthropic_api_key=None, _env_file=None)
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        build_agent(settings, httpx.AsyncClient(), persist=False, verify=False)
+
+
+async def test_progress_events_report_activity_not_text() -> None:
+    final = f"**Short answer**\n\nYes [IRC § 274(n)].\n\n{DISCLAIMER}"
+    messages: list[Message] = [
+        AssistantMessage(
+            content=[
+                TextBlock("Draft text that must not be streamed."),
+                ToolUseBlock("tu1", "mcp__writeoff__search_tax_law", {"query": "client meals"}),
+                ToolUseBlock(
+                    "tu2", "mcp__writeoff__get_tax_parameter", {"name": "mileage", "tax_year": 2025}
+                ),
+            ],
+            model="m",
+        ),
+        _result(text=final),
+    ]
+    events: list[AgentEvent] = []
+
+    async def listen(event: AgentEvent) -> None:
+        events.append(event)
+
+    agent = _agent(messages, {}, verifier=Verifier(_StubJudge(final)))
+    answer = await agent.ask("q", on_event=listen)
+    assert [(e.kind, e.message) for e in events] == [
+        ("tool", "Searching the tax law: client meals"),
+        ("tool", "Looking up mileage"),
+        ("verifying", "Checking the answer against the sources"),
+    ]
+    assert answer.status == "complete"
+
+    async def broken(event: AgentEvent) -> None:
+        raise ConnectionError("client went away")
+
+    again = await _agent(messages, {}).ask("q", on_event=broken)
+    assert again.status == "complete"  # a failing listener never breaks the answer
+
+
+def test_describe_tool() -> None:
+    assert describe_tool("mcp__writeoff__get_citation", {"citation": "§ 179"}) == "Reading § 179"
+    assert describe_tool("mcp__writeoff__calc_home_office", {}) == (
+        "Running the home office calculator"
+    )
+    assert describe_tool("mcp__writeoff__classify_expense", {}) == "Classifying the expense"
+    assert describe_tool("mcp__writeoff__search_tax_law", {}) == "Searching the tax law"
+
+
+def test_cited_sources_skip_passages_already_inside_a_cited_section() -> None:
+    evidence = Evidence()
+    pub = SourceDocument("Publication 463", "https://www.irs.gov/publications/p463")
+    child = "Generally, you can deduct only 50% of business meals."
+    evidence.add_passage("Pub 463, ch. 2, 50% Limit", child, pub)
+    evidence.add_passage("Pub 463, ch. 2", f"Meals.\n\n{child}\n\nMore.", pub)
+    evidence.add_passage("IRC § 274(n)(1)", "(1) In general ... 50 percent ...")
+    evidence.add_passage("IRC § 162(a)", "never cited")
+    text = "Half [Pub 463, ch. 2, 50% Limit]. See [Pub 463, ch. 2] and [IRC § 274(n)(1)]."
+    sources = cited_sources(text, evidence)
+    assert [s.citation for s in sources] == ["Pub 463, ch. 2", "IRC § 274(n)(1)"]
+    assert sources[0].url == pub.url
+    assert sources[0].title == "Publication 463"
+    assert sources[1].title is None  # passage recorded without its document
+
+
+class _RecordingStore:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def load_session(self, session_id: Any) -> SessionState:
+        self.calls.append("load_session")
+        return SessionState(session_id)
+
+    def __getattr__(self, name: str) -> Any:
+        async def record(*args: Any, **kwargs: Any) -> None:
+            self.calls.append(name)
+
+        return record
+
+
+async def test_zero_trace_retention_keeps_sessions_but_writes_no_traces() -> None:
+    @asynccontextmanager
+    async def factory(options: ClaudeAgentOptions) -> AsyncIterator[ClientLike]:
+        yield FakeClient([_result()], [], False)
+
+    config = AgentConfig(model="m", supported_years=YEARS)
+    prompt = load_system_prompt(REPO / "prompts" / "system.md")
+    for record_traces, expected in [
+        (
+            True,
+            ["load_session", "save_session", "start_request", "save_session", "finish_request"],
+        ),
+        (False, ["load_session", "save_session", "save_session"]),
+    ]:
+        store = _RecordingStore()
+        agent = WriteOffAgent(
+            config,
+            prompt,
+            _runtime(),
+            store=cast(Any, store),
+            client_factory=factory,
+            record_traces=record_traces,
+        )
+        await agent.ask("q")
+        assert store.calls == expected

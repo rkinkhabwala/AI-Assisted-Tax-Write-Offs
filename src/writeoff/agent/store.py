@@ -71,6 +71,10 @@ class AgentStore:
     # --- sessions --------------------------------------------------------------------
 
     async def load_session(self, session_id: UUID) -> SessionState:
+        """The stored session, or a fresh one with that id."""
+        return await self.find_session(session_id) or SessionState(session_id=session_id)
+
+    async def find_session(self, session_id: UUID) -> SessionState | None:
         async with await self._connect() as conn:
             row = await (
                 await conn.execute(
@@ -78,7 +82,7 @@ class AgentStore:
                 )
             ).fetchone()
         if row is None:
-            return SessionState(session_id=session_id)
+            return None
         return SessionState(
             session_id=session_id,
             entity_type=EntityType(row["entity_type"]) if row["entity_type"] else None,
@@ -244,6 +248,20 @@ class AgentStore:
             r["latency_ms"],
             r["created_at"],
         )
+
+    async def purge_sessions(self, idle_days: int) -> int:
+        """Retention: delete sessions not updated within the window. Their business
+        profile goes with them, and their traces cascade."""
+        async with await self._connect() as conn:
+            rows = await (
+                await conn.execute(
+                    "DELETE FROM agent_sessions "
+                    "WHERE updated_at < now() - make_interval(days => %s) "
+                    "RETURNING session_id",
+                    (idle_days,),
+                )
+            ).fetchall()
+        return len(rows)
 
     async def purge_traces(self, older_than_days: int) -> int:
         """Retention (spec section 9): delete requests (and their tool calls) past the window."""

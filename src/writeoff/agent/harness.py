@@ -5,13 +5,18 @@ in-process MCP tools are available and pre-approved; `permission_mode="dontAsk"`
 anything else; `strict_mcp_config` and `setting_sources=[]` keep local Claude Code
 configuration out.
 
+Authentication: the API key is passed to the Claude Code subprocess explicitly (`env`).
+Otherwise the CLI falls back to whatever login exists on the machine, such as a personal
+claude.ai subscription, which Anthropic doesn't allow for products built on the SDK.
+
 Guardrails: `max_turns` and `max_budget_usd` bound the loop, and every tool call has a
 timeout (ToolRuntime). Hitting a limit returns a partial answer that says so. It never
 raises to the caller.
 """
 
+import logging
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from datetime import date
 from typing import Any, Literal, Protocol
@@ -26,16 +31,18 @@ from claude_agent_sdk import (
     ToolUseBlock,
 )
 from claude_agent_sdk.types import Message
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
+from writeoff.agent.evidence import Evidence
 from writeoff.agent.hooks import TraceHooks
 from writeoff.agent.prompt import SystemPrompt, session_context
 from writeoff.agent.store import AgentStore, SessionState, ToolCallRecord
 from writeoff.agent.tools import SERVER_NAME, ToolRuntime, tool_names
-from writeoff.agent.verifier import VerificationReport, Verifier
+from writeoff.agent.verifier import VerificationReport, Verifier, cited_citations
 from writeoff.models import EntityType
 from writeoff.privacy import redact
 
+logger = logging.getLogger(__name__)
 AnswerStatus = Literal["complete", "partial", "error"]
 _LIMIT_NOTES = {
     "error_max_turns": "the maximum number of reasoning steps",
@@ -62,6 +69,69 @@ class TraceStep(BaseModel):
     tool_use_id: str | None = None
 
 
+class CitedSource(BaseModel):
+    """A passage the final answer cites, for the UI's Sources panel."""
+
+    citation: str
+    title: str | None = None
+    url: str | None = None
+    text: str
+
+
+class AgentEvent(BaseModel):
+    """Progress while an answer is prepared. Only activity is streamed, never draft text:
+    the draft may still change when the verifier checks it."""
+
+    kind: Literal["tool", "verifying"]
+    message: str
+    tool: str | None = None
+
+
+EventHandler = Callable[[AgentEvent], Awaitable[None]]
+
+
+def describe_tool(name: str, tool_input: dict[str, Any]) -> str:
+    short = name.removeprefix(f"mcp__{SERVER_NAME}__")
+    if short == "search_tax_law":
+        return f"Searching the tax law: {tool_input.get('query', '')}".rstrip(": ")
+    if short == "get_citation":
+        return f"Reading {tool_input.get('citation', 'a provision')}"
+    if short == "get_tax_parameter":
+        return f"Looking up {tool_input.get('name', 'a tax parameter')}"
+    if short == "classify_expense":
+        return "Classifying the expense"
+    if short.startswith("calc_"):
+        return f"Running the {short.removeprefix('calc_').replace('_', ' ')} calculator"
+    return f"Using {short}"
+
+
+def cited_sources(text: str, evidence: Evidence) -> list[CitedSource]:
+    """The retrieved passages the answer cites. A passage whose text is already inside a
+    cited enclosing section is left out, so the panel doesn't repeat itself."""
+    wanted = cited_citations(text, evidence)
+    joined = {c: "\n\n".join(evidence.passages[c]) for c in wanted}
+    sources = []
+    for citation in wanted:
+        body = joined[citation]
+        if any(
+            other != citation
+            and citation.startswith((other + "(", other + ", "))
+            and all(t in joined[other] for t in evidence.passages[citation])
+            for other in wanted
+        ):
+            continue
+        doc = evidence.documents.get(citation)
+        sources.append(
+            CitedSource(
+                citation=citation,
+                title=doc.title if doc else None,
+                url=doc.url if doc else None,
+                text=body,
+            )
+        )
+    return sources
+
+
 class AgentAnswer(BaseModel):
     request_id: UUID
     session_id: UUID
@@ -78,6 +148,7 @@ class AgentAnswer(BaseModel):
     prompt_version: str = ""
     draft: str | None = None  # the agent's text before verification edits
     retrieved_citations: list[str] = Field(default_factory=list)
+    sources: list[CitedSource] = Field(default_factory=list)
     verification: VerificationReport | None = None
 
 
@@ -86,6 +157,8 @@ class AgentConfig(BaseModel):
     max_turns: int = Field(default=12, ge=1)
     max_budget_usd: float = Field(default=0.5, gt=0)
     supported_years: tuple[int, ...]
+    # Required in production (see factory); optional so tests can use a fake client.
+    api_key: SecretStr | None = None
 
 
 class WriteOffAgent:
@@ -99,6 +172,7 @@ class WriteOffAgent:
         verifier: Verifier | None = None,
         client_factory: ClientFactory = default_client,
         today: Callable[[], date] = date.today,
+        record_traces: bool = True,
     ) -> None:
         self._config = config
         self._prompt = prompt
@@ -107,6 +181,8 @@ class WriteOffAgent:
         self._verifier = verifier
         self._client_factory = client_factory
         self._today = today
+        # Sessions are always kept (they carry the conversation); traces only if enabled.
+        self._traces = store if record_traces else None
 
     def options(self, state: SessionState, hooks: TraceHooks) -> ClaudeAgentOptions:
         context = session_context(state, self._config.supported_years, self._today())
@@ -124,6 +200,11 @@ class WriteOffAgent:
             max_budget_usd=self._config.max_budget_usd,
             hooks=hooks.matchers(),
             resume=state.sdk_session_id,
+            env=(
+                {"ANTHROPIC_API_KEY": self._config.api_key.get_secret_value()}
+                if self._config.api_key
+                else {}
+            ),
         )
 
     async def ask(
@@ -134,6 +215,7 @@ class WriteOffAgent:
         entity_type: EntityType | None = None,
         tax_year: int | None = None,
         business_profile: dict[str, Any] | None = None,
+        on_event: EventHandler | None = None,
     ) -> AgentAnswer:
         started = time.monotonic()
         session_id = session_id or uuid4()
@@ -149,13 +231,14 @@ class WriteOffAgent:
         question_redacted = redact(question)
         if self._store:
             await self._store.save_session(state)
-            await self._store.start_request(
+        if self._traces:
+            await self._traces.start_request(
                 request_id, session_id, question_redacted, self._prompt.version, self._config.model
             )
         hooks = TraceHooks(
             self._runtime,
             self._config.supported_years,
-            self._store.record_tool_call if self._store else None,
+            self._traces.record_tool_call if self._traces else None,
         )
         run = _Run()
         try:
@@ -163,6 +246,17 @@ class WriteOffAgent:
                 await client.query(question_redacted)
                 async for message in client.receive_response():
                     run.add(message)
+                    if on_event is not None and isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if isinstance(block, ToolUseBlock):
+                                await _emit(
+                                    on_event,
+                                    AgentEvent(
+                                        kind="tool",
+                                        message=describe_tool(block.name, block.input),
+                                        tool=block.name,
+                                    ),
+                                )
         except Exception as exc:  # the SDK surfaces CLI/transport failures as varied types
             run.failure = f"{type(exc).__name__}: {exc}"
         steps, texts, result, failure = run.steps, run.texts, run.result, run.failure
@@ -170,6 +264,11 @@ class WriteOffAgent:
         status, text, stop = _outcome(result, texts, failure)
         draft, report = text, None
         if self._verifier is not None and status in {"complete", "partial"}:
+            if on_event is not None:
+                await _emit(
+                    on_event,
+                    AgentEvent(kind="verifying", message="Checking the answer against the sources"),
+                )
             text, report = await self._verifier.verify(
                 draft, question_redacted, self._runtime.state.evidence
             )
@@ -193,23 +292,30 @@ class WriteOffAgent:
             draft=draft if report and draft != text else None,
             verification=report,
             retrieved_citations=self._runtime.state.evidence.citations,
+            sources=cited_sources(text, self._runtime.state.evidence),
         )
+        await self._finish(state, answer, report)
+        return answer
+
+    async def _finish(
+        self, state: SessionState, answer: AgentAnswer, report: VerificationReport | None
+    ) -> None:
         if self._store:
             await self._store.save_session(state)
-            await self._store.finish_request(
-                request_id,
-                status=status,
-                stop_reason=stop,
+        if self._traces:
+            await self._traces.finish_request(
+                answer.request_id,
+                status=answer.status,
+                stop_reason=answer.stop_reason,
                 num_turns=answer.num_turns,
-                tool_calls=len(hooks.calls),
+                tool_calls=len(answer.tool_calls),
                 input_tokens=answer.input_tokens,
                 output_tokens=answer.output_tokens,
                 cost_usd=answer.cost_usd,
                 latency_ms=answer.latency_ms,
             )
             if report is not None:
-                await self._store.record_verification(request_id, report)
-        return answer
+                await self._traces.record_verification(answer.request_id, report)
 
 
 class _Run:
@@ -240,6 +346,15 @@ class _Run:
                         tool_use_id=block.id,
                     )
                 )
+
+
+async def _emit(handler: EventHandler, event: AgentEvent) -> None:
+    """Progress is best effort: a failing listener (e.g. a closed stream) never breaks
+    the answer."""
+    try:
+        await handler(event)
+    except Exception:  # the listener is caller code of any kind
+        logger.warning("progress listener failed", exc_info=True)
 
 
 def total_input_tokens(usage: dict[str, Any]) -> int | None:

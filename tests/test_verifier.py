@@ -14,6 +14,7 @@ from writeoff.agent.evidence import Evidence, all_numbers, money_figures
 from writeoff.agent.prompt import DISCLAIMER
 from writeoff.agent.tools import ToolRuntime
 from writeoff.agent.verifier import (
+    UNCONFIRMED_NOTE,
     ClaimCheck,
     ClaudeJudge,
     Findings,
@@ -171,7 +172,9 @@ async def test_edits_applied_once_then_verified() -> None:
     assert GOOD in text
     assert NOTE in text
     assert BAD not in text
-    assert "conference meals" in text  # what was narrowed is disclosed
+    assert UNCONFIRMED_NOTE in text  # narrowing is disclosed in one short note
+    assert "conference meals" not in text
+    assert report.unconfirmed == ["conference meals"]  # specifics go to the API response
     assert text.rstrip().endswith(DISCLAIMER)
 
 
@@ -199,7 +202,8 @@ async def test_second_failure_strips_and_discloses() -> None:
     assert GOOD in text
     assert "80%" not in text
     assert BAD not in text
-    assert "conference meals" in text
+    assert UNCONFIRMED_NOTE in text
+    assert report.unconfirmed == ["conference meals"]
     assert text.rstrip().endswith(DISCLAIMER)
 
 

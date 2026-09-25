@@ -60,15 +60,24 @@ def all_numbers(text: str) -> set[Decimal]:
     return values
 
 
+@dataclass(frozen=True, slots=True)
+class SourceDocument:
+    title: str
+    url: str
+
+
 @dataclass(slots=True)
 class Evidence:
     # citation -> distinct texts: grouped parent sections can share a citation path.
     passages: dict[str, list[str]] = field(default_factory=dict)
+    documents: dict[str, SourceDocument] = field(default_factory=dict)  # citation -> source
     parameters: dict[str, str] = field(default_factory=dict)  # name -> "value unit (source)"
     calculations: list[str] = field(default_factory=list)  # tool name + JSON result
     _numbers: set[Decimal] = field(default_factory=set)
 
-    def add_passage(self, citation: str, text: str) -> None:
+    def add_passage(self, citation: str, text: str, source: SourceDocument | None = None) -> None:
+        if source is not None:
+            self.documents.setdefault(citation, source)
         texts = self.passages.setdefault(citation, [])
         if text and text not in texts:
             texts.append(text)
