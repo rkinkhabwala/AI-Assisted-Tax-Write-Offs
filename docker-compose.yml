@@ -28,5 +28,30 @@ services:
       db:
         condition: service_healthy
 
+  ui:
+    build: .
+    command:
+      - streamlit
+      - run
+      - src/writeoff/ui/app.py
+      - --server.port=8501
+      - --server.address=0.0.0.0
+      - --server.headless=true
+      - --browser.gatherUsageStats=false
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      WRITEOFF_API_URL: http://app:8000
+    ports:
+      - "8501:8501"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
+      interval: 10s
+      timeout: 3s
+    depends_on:
+      app:
+        condition: service_healthy
+
 volumes:
   pgdata:

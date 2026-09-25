@@ -16,6 +16,9 @@ from writeoff.tax_parameters import TaxParameters
 def build_agent(
     settings: Settings, http: httpx.AsyncClient, *, persist: bool = True, verify: bool = True
 ) -> WriteOffAgent:
+    if settings.anthropic_api_key is None:
+        # Without it the SDK's CLI would fall back to a local claude.ai login.
+        raise RuntimeError("ANTHROPIC_API_KEY is required to run the agent")
     runtime = ToolRuntime(
         TaxParameters(settings.tax_parameters_dir, settings.supported_tax_years),
         build_retriever(settings, http),
@@ -27,13 +30,19 @@ def build_agent(
         max_turns=settings.agent_max_turns,
         max_budget_usd=settings.agent_max_budget_usd,
         supported_years=settings.supported_tax_years,
+        api_key=settings.anthropic_api_key,
     )
     store = AgentStore(str(settings.database_url)) if persist else None
     verifier = None
     if verify:
-        if settings.anthropic_api_key is None:
-            raise RuntimeError("ANTHROPIC_API_KEY is required for the grounding verifier")
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value())
         verifier = Verifier(ClaudeJudge(client, settings.verifier_model))
     prompt = load_system_prompt(settings.system_prompt_path)
-    return WriteOffAgent(config, prompt, runtime, store=store, verifier=verifier)
+    return WriteOffAgent(
+        config,
+        prompt,
+        runtime,
+        store=store,
+        verifier=verifier,
+        record_traces=settings.trace_retention_days > 0,
+    )

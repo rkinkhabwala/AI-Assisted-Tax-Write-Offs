@@ -18,6 +18,8 @@ dependencies = [
     "selectolax>=0.3",
     "anthropic>=1.8",
     "defusedxml>=0.7",
+    "streamlit>=1.64.0",
+    "python-multipart>=0.0.32",
 ]
 
 [dependency-groups]

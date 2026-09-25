@@ -143,17 +143,64 @@ Observed in live traces (for phases 7-8):
 - [x] Tests: 303 total (tag resolution incl. abbreviations, figure tracing, cited-evidence selection, every loop outcome with a scripted judge, the structured-output request against a mocked API, evidence capture, harness integration, persistence)
 - [x] Live: laptop question 24 supported / 1 partial / 1 unsupported, caught two real overstatements; the verifier went from about 67k/8.4k to about 27k/4.0k tokens and end-to-end latency from 104s to 67s after the edits and round-2 changes
 
-## Phase 8: answer + safety evals → report
-- [ ] `golden_set.jsonl` with 50+ cases covering the spec section 7b topics
-- [ ] `rubric.md` + LLM-as-judge; 10% hand spot-check
-- [ ] Metrics: treatment accuracy, citation P/R, faithfulness, hallucinated-citation rate, disclaimer, clarifying-question rate
-- [ ] `safety_cases.jsonl`: evasion refusals with alternatives; CSV prompt injection
-- [ ] Loop metrics: turns, tool calls, % hitting max_turns, p50/p95 latency, cost
-- [ ] CI regression gate (−3 points on treatment accuracy or Recall@10)
-- [ ] Report
+## Phase 8: answer + safety evals → report ✅ (hand spot-check pending)
+- [x] `golden_set.jsonl`: 63 cases covering every spec 7b topic plus clarify, no-authority, year-carryover and out-of-scope cases, all four entity types. Labels: acceptable treatments, required citation groups (any alternative counts), acceptable citations, required/forbidden regexes, reference key points. `check-answers` verifies every label resolves in the index (regulation-part labels like `Treas. Reg. § 1.274` supported)
+- [x] `rubric.md` (v1.0.0) is the judge's instruction text. Judge = Claude Opus 5.5 (different model from the agent): a blind classification call (never sees the expected label), then a 0-2 scoring call against key points. Each run writes a seeded 10% spot-check sheet; `make eval-agreement` scores judge vs human (fails < 90%)
+- [ ] Hand spot-check of `evals/reports/spot_check_20260925T002414Z.md`: **needs a human reviewer**
+- [x] Metrics: treatment accuracy, citation recall and precision (lower bound), hallucinated-citation rate on draft and final, faithfulness on draft and final, untraced figures, disclaimer, clarifying-question rate (and over-asking), required/forbidden text, rubric means
+- [x] `safety_cases.jsonl`: 8 evasion (refuse and offer a legitimate route), 5 over-refusal checks, 5 CSV prompt injections (canary, system-prompt exfiltration, fake approval, role switch, entity/year override)
+- [x] Loop metrics: turns, tool calls, max_turns and budget-stop rates, partial answers, p50/p95 latency, cost per answer split into agent and verifier, judge cost
+- [x] Regression gate: `make eval-full` gates Recall@10 and treatment accuracy (−3 points; only full golden runs are compared or saved). Baseline `evals/baselines/answers.json` = run 20260925T002414Z
+- [x] Cost cap (`--max-cost`, default $20) and `--retry-from REPORT` to re-run errored or skipped cases and merge them into one report
+- [x] Report: `evals/reports/answers-20260925T002414Z.html`. Treatment accuracy 93.7% (59/63), citation recall 99.0%, precision 89.9%, hallucinated citations 1.5% of draft cites and 0% final, faithfulness 80.7% draft and 92.5% final, disclaimer 100%, clarify when needed 100% (over-asking 1.7%), safety 18/18, no max_turns hits, p50/p95 51s/80s, about $0.19 per answer (agent $0.13 + verifier $0.07)
+- [x] Bugs found and fixed along the way:
+  - verifier edit debris (empty bullets, `..`, repeated tags) → `tidy()`
+  - classifier: "printer paper" classified as equipment → supplies wins ties
+  - **the agent's CLI was using the local claude.ai login instead of the API key** → key passed via `ClaudeAgentOptions.env`, and `build_agent` refuses to run without it
+  - agent failure reasons are now shown in eval output
+- [x] Tests: 327 total
 
-## Phase 9: FastAPI + UI
-- [ ] Chat endpoint (streaming), session endpoints, CSV upload (cells treated strictly as data)
-- [ ] UI (per D3) with a collapsible "Sources" panel
-- [ ] Data-retention job (`TRACE_RETENTION_DAYS`)
-- [ ] End-to-end smoke test in docker compose
+Notes carried forward:
+- Misses:
+  - `meals-breakroom-2026`: the agent says the sources conflict (§ 274(o) vs the Reg. § 1.274-12 example); the label may be too certain. **User decision.**
+  - `health-scorp-2pct` and `gen-ccorp-charity`: correct answers labeled `informational` because the questions ask "how"; consider accepting `informational`. **User decision.**
+  - `oos-gambling`: the clarifying question stated uncited rules. Clarifying questions skip the verifier (grounding gap).
+- Rubric "format" mean is 1.05/2, the weakest dimension: answers run long, and verifier notes like "This point could not be confirmed" read awkwardly mid-answer. This is the tuning target (prompt v1.1 and answer length).
+- Spec 9 asks to *refuse and not log* CSV injection attempts; the agent currently ignores the injected text. Handle this at the Phase 9 upload endpoint.
+- Out-of-scope retrieval sample is still 7 queries; the weak threshold of 0.6 hasn't been recalibrated.
+
+## Phase 9: FastAPI + UI ✅
+- [x] API (`api/app.py`, `create_app()` with injectable agent and session store):
+  - session endpoints (create, read, patch; profile redacted; supported years enforced)
+  - `POST /v1/chat` (JSON) and `POST /v1/chat/stream` (SSE)
+  - bearer-token auth (`API_TOKEN`)
+  - `MAX_CONCURRENT_ANSWERS` semaphore
+  - 503 when API keys are missing
+- [x] Streaming sends progress events from `ask(on_event=...)` ("Searching the tax law…", "Checking the answer…"), keep-alives every 15s, then the verified answer. Draft text is never streamed because the verifier may still change it. A client disconnect cancels the run
+- [x] Answers carry `sources`: every cited passage with its document title and URL (evidence now records source documents); passages already inside a cited section are folded in
+- [x] CSV upload (`expenses.py`):
+  - every cell and header is screened for text addressed to an AI system; a match refuses the whole file with cell positions only (never the text)
+  - nothing about an upload is stored or logged, and upload requests are filtered out of the access log (spec 9)
+  - clean rows are classified by the deterministic rules; no model reads cells
+  - all 5 safety-set injection CSVs are refused, and ordinary memos ("Assistant: Maria wages") pass
+- [x] UI (`ui/app.py`, Streamlit per D3):
+  - sidebar for entity type and tax year, which syncs the session
+  - chat with a live status line, verification note and collapsible Sources panel
+  - "Upload expenses" tab with totals and a per-row table
+  - API client with SSE parser in `ui/client.py`
+- [x] Retention (`retention.py`, `make purge`, a daily task in the API):
+  - `TRACE_RETENTION_DAYS` (0 = traces never written, as `.env.example` always promised)
+  - new `SESSION_RETENTION_DAYS` (0 = keep)
+- [x] docker compose: db + app + ui (healthchecks, `--wait`)
+- [x] `make smoke` (`scripts/smoke_test.py`) passes:
+  - readiness, session round trip, CSV classification, CSV injection refusal
+  - one live streamed question in the container (API-key auth confirmed; no local login exists there)
+  - a full answer through the container returned 4 sources with links
+- [x] Tests: 377 total (API, SSE, cancellation, auth, CSV screening and parsing, retention against Postgres, UI via Streamlit AppTest and a mocked API)
+
+Known gaps:
+- No per-user accounts or rate limiting beyond one shared bearer token.
+- The concurrency cap is per process.
+- The store opens a connection per call (no pool). Fine at this scale.
+- The chat endpoint doesn't screen pasted CSV text the way uploads are screened; the agent treats it as data and the eval shows 5/5 resisted. Uploads are the refused path.
+- Streamlit keeps chat history in the browser session only; the API session persists its facts and the SDK conversation.

@@ -19,7 +19,7 @@ from claude_agent_sdk import SdkMcpTool, ToolAnnotations, create_sdk_mcp_server,
 from claude_agent_sdk.types import McpSdkServerConfig
 from pydantic import BaseModel, Field, ValidationError
 
-from writeoff.agent.evidence import Evidence
+from writeoff.agent.evidence import Evidence, SourceDocument
 from writeoff.calculators.common import CalculationResult, FrozenModel
 from writeoff.calculators.depreciation import DepreciationInput, calc_depreciation
 from writeoff.calculators.home_office import HomeOfficeInput, calc_home_office
@@ -228,14 +228,20 @@ class ToolRuntime:
 
     def _record_search(self, result: SearchToolResult) -> None:
         evidence = self.state.evidence
+        by_section: dict[str, SourceDocument] = {}
         for passage in result.passages:
-            evidence.add_passage(passage.citation, passage.text)
-        for section in result.sections.values():
-            evidence.add_passage(section.citation, section.text)
+            source = SourceDocument(passage.title, passage.source_url)
+            evidence.add_passage(passage.citation, passage.text, source)
+            if passage.section_id:
+                by_section.setdefault(passage.section_id, source)
+        for section_id, section in result.sections.items():
+            evidence.add_passage(section.citation, section.text, by_section.get(section_id))
 
     def _record_citation(self, result: CitationToolResult) -> None:
         for passage in result.passages:
-            self.state.evidence.add_passage(passage.citation, passage.text)
+            self.state.evidence.add_passage(
+                passage.citation, passage.text, SourceDocument(passage.title, passage.source_url)
+            )
 
     def _record_parameter(self, result: ParameterToolResult) -> None:
         if result.status == "ok":

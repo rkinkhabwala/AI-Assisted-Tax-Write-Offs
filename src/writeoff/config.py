@@ -78,7 +78,19 @@ class Settings(BaseSettings):
     system_prompt_path: Path = Path("prompts/system.md")
 
     # --- Privacy (spec section 9) ---------------------------------------------------
+    # Days to keep request and tool-call traces; 0 means traces are never written.
     trace_retention_days: int = Field(default=30, ge=0)
+    # Days a session (entity type, tax year, profile, conversation) may sit idle; 0 keeps them.
+    session_retention_days: int = Field(default=30, ge=0)
+
+    # --- API ---------------------------------------------------------------------------
+    # Bearer token for /v1 endpoints. Unset leaves the API open (local development only).
+    api_token: SecretStr | None = None
+    # Questions answered at once; each runs a Claude Code subprocess and spends API credit.
+    max_concurrent_answers: int = Field(default=4, ge=1)
+    retention_interval_hours: float = Field(default=24.0, gt=0)
+    # Where the UI finds the API (docker compose sets http://app:8000).
+    writeoff_api_url: str = "http://localhost:8000"
 
     @field_validator("embedding_dimension")
     @classmethod

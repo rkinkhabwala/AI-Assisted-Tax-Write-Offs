@@ -888,6 +888,17 @@ sources:
     2026:
       url: https://www.irs.gov/publications/p583
       parser: irs_html
+- id: pub-15
+  title: Publication 15 (Circular E), Employer's Tax Guide
+  citation_root: Pub 15
+  doc_type: irs_publication
+  editions:
+    2025:
+      url: https://www.irs.gov/pub/irs-prior/p15--2025.pdf
+      parser: pdf
+    2026:
+      url: https://www.irs.gov/publications/p15
+      parser: irs_html
 - id: instr-sch-c
   title: Instructions for Schedule C (Form 1040)
   citation_root: Instructions for Schedule C
@@ -946,3 +957,15 @@ sources:
       parser: irs_html
   entity_types:
   - partnership
+- id: instr-8995
+  title: Instructions for Form 8995
+  citation_root: Instructions for Form 8995
+  doc_type: form_instructions
+  editions:
+    2025:
+      url: https://www.irs.gov/instructions/i8995
+      parser: irs_html
+  entity_types:
+  - sole_prop
+  - partnership
+  - s_corp

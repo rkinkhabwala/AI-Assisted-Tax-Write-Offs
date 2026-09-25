@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install lint format test test-unit db-up db-down migrate ingest ingest-dry search eval eval-answers eval-full eval-agreement eval-sweep eval-index ask
+.PHONY: help install lint format test test-unit db-up db-down migrate ingest ingest-dry search eval eval-answers eval-full eval-agreement eval-sweep eval-index ask api ui up purge smoke
 
 UV := uv run --no-sync
 YEAR ?= 2025
@@ -33,7 +33,7 @@ test-unit:  ## Tests that need no database
 db-up:  ## Start Postgres 16 + pgvector and wait until healthy
 	docker compose up -d --wait db
 
-db-down:  ## Stop Postgres (data volume is kept)
+db-down:  ## Stop all containers (db, API, UI); the data volume is kept
 	docker compose down
 
 migrate:  ## Apply pending SQL migrations to DATABASE_URL
@@ -70,6 +70,22 @@ eval-sweep:  ## All query-time retrieval variants (INDEX=prod by default); logs 
 
 eval-index:  ## Build an experiment index, e.g. make eval-index VARIANT=large_noctx
 	$(UV) python -m writeoff.evals.cli build-index $(VARIANT)
+
+api:  ## Run the API locally with reload (http://localhost:8000/docs)
+	$(UV) uvicorn writeoff.api.app:app --reload --port 8000
+
+ui:  ## Run the Streamlit UI locally against WRITEOFF_API_URL (default http://localhost:8000)
+	$(UV) streamlit run src/writeoff/ui/app.py --browser.gatherUsageStats=false
+
+up:  ## Build and start db + API + UI in docker compose (UI on http://localhost:8501)
+	docker compose up -d --build
+
+purge:  ## Delete traces and idle sessions past TRACE_/SESSION_RETENTION_DAYS
+	$(UV) python -m writeoff.retention
+
+smoke:  ## End-to-end smoke test against docker compose (one cheap live question; NO_LLM=1 skips it)
+	docker compose up -d --build --wait
+	$(UV) python scripts/smoke_test.py $(if $(NO_LLM),--no-llm)
 
 ask:  ## Ask the agent and print the trace, e.g. make ask Q="Can I deduct a client lunch?" ENTITY=sole_prop
 	$(UV) python -m writeoff.agent.cli "$(Q)" --year $(YEAR) $(if $(ENTITY),--entity $(ENTITY))

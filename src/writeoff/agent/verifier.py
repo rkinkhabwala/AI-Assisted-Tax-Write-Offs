@@ -169,13 +169,19 @@ def related_citations(tag: str, citations: list[str]) -> list[str]:
     return [c for c in citations if any(_within(f, c) or _within(c, f) for f in forms)]
 
 
-def cited_evidence(draft: str, evidence: Evidence) -> str:
-    """The evidence blocks the judge sees: cited passages, then parameters and calculations."""
+def cited_citations(text: str, evidence: Evidence) -> list[str]:
+    """Retrieved citations the text's tags refer to, in order of first mention."""
     wanted: list[str] = []
-    for tag in citation_tags(draft):
+    for tag in citation_tags(text):
         for citation in related_citations(tag, evidence.citations):
             if citation not in wanted:
                 wanted.append(citation)
+    return wanted
+
+
+def cited_evidence(draft: str, evidence: Evidence) -> str:
+    """The evidence blocks the judge sees: cited passages, then parameters and calculations."""
+    wanted = cited_citations(draft, evidence)
     blocks = [
         f'<passage citation="{c}">\n{text}\n</passage>'
         for c in wanted
@@ -206,9 +212,10 @@ Facts the user stated in the question are not claims. Headings, the disclaimer, 
 advice to keep records or consult a professional are not claims.
 
 For every claim that is not SUPPORTED, give a `replacement`: the claim narrowed to \
-exactly what the evidence supports (keep a valid citation), or a short sentence saying \
-the point couldn't be confirmed from the sources, or an empty string to drop it. Never \
-add a fact, number or citation that isn't in the evidence. Keep reasons short.
+exactly what the evidence supports (keep a valid citation), or an empty string to drop \
+it. Don't write a sentence saying a point couldn't be confirmed; the answer adds one short \
+note itself. Never add a fact, number or citation that isn't in the evidence. Keep \
+reasons short.
 
 List in `unconfirmed` a short description of each point you dropped or narrowed."""
 
@@ -323,16 +330,16 @@ def apply_edits(text: str, claims: list[ClaimCheck]) -> str:
     return tidy(edited)
 
 
+UNCONFIRMED_NOTE = "_Some points couldn't be confirmed from my sources and were left out._"
+
+
 def _with_note(text: str, unconfirmed: list[str]) -> str:
+    """One short note in the answer. The specifics (`report.unconfirmed`) are written for
+    review, not for the user, and are returned by the API separately."""
     if not unconfirmed:
         return text
     body = text.replace(DISCLAIMER, "").rstrip()
-    note = (
-        "_Some points couldn't be confirmed from my sources and were narrowed or left out: "
-        + "; ".join(unconfirmed)
-        + "._"
-    )
-    return f"{body}\n\n{note}\n\n{DISCLAIMER}"
+    return f"{body}\n\n{UNCONFIRMED_NOTE}\n\n{DISCLAIMER}"
 
 
 def strip_unsupported(
